@@ -1,0 +1,17 @@
+name: 'a-okvqa'
+type: 'gen'
+module: "tasks.vqa.task.VQAGenTask"
+path: 'aokvqa_v1p0'
+file-pattern:
+  validation: "aokvqa_v1p0_val.json"
+  test: "aokvqa_v1p0_test.json"
+clip-pattern:
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_val.jsonl"
+  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_test.jsonl"
+sampling_strategy: "BeamSearchStrategy"
+num_beams: 4
+max_gen_length: 32
+rationale_generation: true
+use_task_mask: true
+end_tokens: ["."]
+save_prediction: true
