@@ -4,12 +4,11 @@ module: "tasks.vqa.task.VQAMulTask"
 path: 'aokvqa_v1p0'
 file-pattern:
   validation: "aokvqa_v1p0_val.json"
-  test: "aokvqa_v1p0_test.json"
 clip-pattern:
-  validation: "/group/30042/zhengxiaodu/VQA/aokvqa_clip_vg_val.jsonl"
-  test: "/group/30042/zhengxiaodu/VQA/aokvqa_clip_vg_test.jsonl"
-ocr-pattern:
-  validation: "/group/30042/zhengxiaodu/VQA/aokvqa_ocr_val.jsonl"
-  test: "/group/30042/zhengxiaodu/VQA/aokvqa_ocr_test.jsonl"
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_val.jsonl"
+  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_test.jsonl"
+caption-pattern:
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_val.jsonl"
+  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_test.jsonl"
 micro_batch_size: 6
 save_prediction: true

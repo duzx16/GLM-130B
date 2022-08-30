@@ -4,10 +4,17 @@ module: "tasks.vqa.task.VQAGenTask"
 path: 'aokvqa_v1p0'
 file-pattern:
   validation: "aokvqa_v1p0_val.json"
-  test: "aokvqa_v1p0_test.json"
 clip-pattern:
+  train: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_train.jsonl"
   validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_val.jsonl"
   test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_test.jsonl"
+caption-pattern:
+  train: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_train.jsonl"
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_val.jsonl"
+  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_test.jsonl"
+priming: true
+num_train_examples: 10
+train_path: "/zhangpai21/workspace/zxdu/aokvqa_v1p0/aokvqa_v1p0_train_few.json"
 sampling_strategy: "BeamSearchStrategy"
 num_beams: 4
 max_gen_length: 32

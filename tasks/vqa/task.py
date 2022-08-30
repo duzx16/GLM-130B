@@ -22,8 +22,7 @@ def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None):
     scene_sent, object_sent = None, None
     if entities is not None:
         description = entities[image_id]
-        img_type, ppl_result, sorted_places = description["img_type"], description["ppl_result"], description[
-            "sorted_places"]
+        img_type, sorted_places = description["img_type"], description["sorted_places"]
         object_list = description["object_list"]
         object_result = ", ".join(object_list)
         scene_sent = f'I think this image was taken at a {sorted_places[0]}, {sorted_places[1]}, or {sorted_places[2]}.'
@@ -67,7 +66,7 @@ def load_descriptions(config, split):
     return descriptions
 
 
-def build_priming_vqa_prompt(config, add_answer_period=False):
+def build_priming_vqa_prompt(config, add_answer_period=False, add_rationale=False):
     priming_prompt = ""
     assert config.train_path is not None
     with open(config.train_path) as file:
@@ -80,6 +79,8 @@ def build_priming_vqa_prompt(config, add_answer_period=False):
         priming_prompt += prompt + answer
         if add_answer_period:
             priming_prompt += "."
+        if add_rationale:
+            priming_prompt += ", because in this image, " + random.choice(item["rationales"]).strip(".") + ". "
         priming_prompt += " "
     tokenizer = get_tokenizer()
     prompt_length = len(tokenizer.tokenize(priming_prompt))
@@ -171,7 +172,7 @@ class VQAGenDataset(GenerationTaskDataset):
         self.priming = config.priming
         self.num_train_examples = config.num_train_examples
         if self.priming:
-            self.priming_prompt = build_priming_vqa_prompt(config, add_answer_period=True)
+            self.priming_prompt = build_priming_vqa_prompt(config, add_answer_period=True, add_rationale=True)
         self.rationale_generation = config.rationale_generation
         super().__init__(path, config)
 
@@ -184,6 +185,8 @@ class VQAGenDataset(GenerationTaskDataset):
             for choice in item["choices"]:
                 answer_prompt = prompt + " " + choice
                 answer_prompt += ", because in this image,"
+                if self.priming:
+                    answer_prompt = self.priming_prompt + answer_prompt
                 dataset.extend(
                     super().process_single_item({"inputs_pretokenized": answer_prompt, "targets_pretokenized": "none"},
                                                 image_id=image_id, choice=choice))
