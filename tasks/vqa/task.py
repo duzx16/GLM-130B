@@ -31,7 +31,7 @@ def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None):
     if ocr_results is not None:
         ocr_result = ocr_results[image_id]
         if ocr_result["texts"]:
-            texts = sorted(ocr_result["texts"], key=lambda x:x["confidence"], reverse=True)
+            texts = sorted(ocr_result["texts"], key=lambda x: x["confidence"], reverse=True)
             texts = ", ".join([f'"{item["text"]}"' for item in texts[:5]])
             ocr_sent = f'The texts in the image include {texts}.'
     prompts = [overall_sent]
@@ -80,7 +80,7 @@ def build_priming_vqa_prompt(config, add_answer_period=False, add_rationale=Fals
         if add_answer_period:
             priming_prompt += "."
         if add_rationale:
-            priming_prompt += ", because in this image, " + random.choice(item["rationales"]).strip(".") + ". "
+            priming_prompt += ", because in this image, " + random.choice(item["rationales"]).strip(".") + "."
         priming_prompt += " "
     tokenizer = get_tokenizer()
     prompt_length = len(tokenizer.tokenize(priming_prompt))
@@ -170,10 +170,11 @@ class VQAGenDataset(GenerationTaskDataset):
     def __init__(self, path, split, config: VQAGenConfig):
         self.descriptions = load_descriptions(config, split)
         self.priming = config.priming
+        self.rationale_generation = config.rationale_generation
         self.num_train_examples = config.num_train_examples
         if self.priming:
-            self.priming_prompt = build_priming_vqa_prompt(config, add_answer_period=True, add_rationale=True)
-        self.rationale_generation = config.rationale_generation
+            self.priming_prompt = build_priming_vqa_prompt(config, add_answer_period=not self.rationale_generation,
+                                                           add_rationale=self.rationale_generation)
         super().__init__(path, config)
 
     def process_single_item(self, item, **kwargs):
