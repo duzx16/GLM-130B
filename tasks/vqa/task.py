@@ -226,5 +226,9 @@ class VQAGenTask(GenerationTask):
                 results[item['image_id']] = result
             else:
                 results[item["image_id"]] = {"direct_answer": prediction}
-        with open("outputs/prediction_gen_" + datetime.now().strftime('%m-%d-%H-%M_') + file, "w") as output:
+        if self.config.rationale_generation:
+            prefix = "prediction_rationale_"
+        else:
+            prefix = "prediction_gen_"
+        with open(os.path.join("outputs", prefix + datetime.now().strftime('%m-%d-%H-%M_') + file), "w") as output:
             json.dump(results, output)
