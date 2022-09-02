@@ -5,11 +5,15 @@ path: 'aokvqa_v1p0'
 file-pattern:
   validation: "aokvqa_v1p0_val.json"
 clip-pattern:
-  train: "/group/30042/zhengxiaodu/VQA/aokvqa_clip_train.jsonl"
-  validation: "/group/30042/zhengxiaodu/VQA/aokvqa_clip_val.jsonl"
-  test: "/group/30042/zhengxiaodu/VQA/aokvqa_clip_test.jsonl"
+  train: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_train.jsonl"
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_val.jsonl"
+  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_test.jsonl"
+caption-pattern:
+  train: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_train.jsonl"
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_val.jsonl"
+  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_test.jsonl"
 micro_batch_size: 2
 save_prediction: true
 priming: true
 num_train_examples: 10
-train_path: "/group/30042/zhengxiaodu/aokvqa_v1p0/aokvqa_v1p0_train.json"
+train_path: "/zhangpai21/workspace/zxdu/aokvqa_v1p0/aokvqa_v1p0_train.json"

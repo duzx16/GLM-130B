@@ -16,9 +16,10 @@ priming: true
 num_train_examples: 10
 train_path: "/zhangpai21/workspace/zxdu/aokvqa_v1p0/aokvqa_v1p0_train_few.json"
 sampling_strategy: "BeamSearchStrategy"
-num_beams: 4
+num_beams: 8
 max_gen_length: 32
 rationale_generation: true
 use_task_mask: true
 end_tokens: ["."]
 save_prediction: true
+return_all_beams: true
