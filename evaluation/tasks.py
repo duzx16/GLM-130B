@@ -203,7 +203,7 @@ class GenerationTask(BaseTask, ABC):
             raise ValueError(f"unknown strategy {self.config.sampling_strategy}")
 
     def predict_single_batch(self, batch) -> List[List[int]]:
-        output = self.model.generate_text(batch, self.strategy, return_all_beams=False)
+        output = self.model.generate_text(batch, self.strategy, return_all_beams=self.config.return_all_beams)
         return output
 
 

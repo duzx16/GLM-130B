@@ -54,6 +54,7 @@ class GenerationTaskConfig(BaseConfig):
     deterministic: bool = True
     top_k: int = 0
     top_p: float = 0.0
+    return_all_beams: bool = False
     end_tokens: List[str] = field(default_factory=lambda: [])
 
 
