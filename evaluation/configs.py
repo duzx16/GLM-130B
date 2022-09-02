@@ -51,6 +51,8 @@ class GenerationTaskConfig(BaseConfig):
     min_gen_length: int = 0
     max_gen_length: int = 128
     end_tokens: List[str] = field(default_factory=lambda: [])
+    return_all_beams: bool = False
+    deterministic: bool = False
 
     def __post_init__(self):
         assert self.micro_batch_size == 1, "Only support micro batch size = 1 for generation task"

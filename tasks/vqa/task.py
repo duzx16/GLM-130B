@@ -217,9 +217,10 @@ class VQAGenTask(GenerationTask):
         tokenizer = get_tokenizer()
         results = {}
         for prediction, item in zip(predictions, data):
-            prediction = tokenizer.detokenize(prediction)
-            if self.config.priming or self.config.rationale_generation:
-                prediction = prediction.split(".")[0]
+            if self.config.return_all_beams:
+                prediction = [tokenizer.detokenize(p) for p in prediction]
+            else:
+                prediction = tokenizer.detokenize(prediction)
             if self.config.rationale_generation:
                 result = results.get(item["image_id"], {})
                 result[item['choice']] = prediction

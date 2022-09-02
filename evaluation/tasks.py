@@ -194,7 +194,7 @@ class GenerationTask(BaseTask, ABC):
                 end_tokens=end_tokens,
                 no_repeat_ngram_size=self.config.no_repeat_ngram_size,
                 min_gen_length=self.config.min_gen_length,
-                deterministic=False,  # For evaluation, we need a determined generation strategy
+                deterministic=self.config.deterministic,  # For evaluation, we need a determined generation strategy
             )
         else:
             raise ValueError(f"unknown strategy {self.config.sampling_strategy}")
@@ -202,7 +202,7 @@ class GenerationTask(BaseTask, ABC):
     def predict_single_batch(self, batch) -> List[List[int]]:
         # micro batch size = 1 for generation task,
         # but we still need to return a list of predictions for consistency
-        output = self.model.generate_text(batch, self.strategy, return_all_beams=False)
+        output = self.model.generate_text(batch, self.strategy, return_all_beams=self.config.return_all_beams)
         return [output]
 
 
