@@ -12,7 +12,7 @@ from typing import Dict, Union, List
 from evaluation import print_rank_0
 
 
-def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None):
+def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, rationales=None):
     image_id = item["question_id"]
     overall_sent = f'Please observe the image and answer the question.'
     caption_sent = None
@@ -34,6 +34,11 @@ def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None):
             texts = sorted(ocr_result["texts"], key=lambda x: x["confidence"], reverse=True)
             texts = ", ".join([f'"{item["text"]}"' for item in texts[:5]])
             ocr_sent = f'The texts in the image include {texts}.'
+    rationale_sent = None
+    if rationales is not None:
+        rationale_sents = rationales[image_id]
+        if rationale_sents:
+            rationale_sent = ". ".join(rationale_sents) + "."
     prompts = [overall_sent]
     if caption_sent is not None:
         prompts.append(caption_sent)
@@ -43,14 +48,31 @@ def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None):
         prompts.append(ocr_sent)
     if object_sent is not None:
         prompts.append(object_sent)
+    if rationale_sent is not None:
+        prompts.append(rationale_sent)
     prompt = " ".join(prompts)
     question = item["question"]
     prompt = prompt + question + " Answer:"
     return prompt
 
 
+def filter_rationale(rationale, topk=5, threshold=0.8):
+    rationale_sents = []
+    sentences, values = [], []
+    for choice, matching_result in rationale.items():
+        for sent, value in matching_result:
+            sentences.append(sent)
+            values.append(value)
+    values = torch.tensor(values)
+    top_values, top_indices = torch.topk(values, k=topk, dim=-1)
+    for value, idx in zip(reversed(top_values.tolist()), reversed(top_indices.tolist())):
+        if value > threshold:
+            rationale_sents.append(sentences[idx])
+    return rationale_sents
+
+
 def load_descriptions(config, split):
-    descriptions = {"clip": None, "ocr": None, "captions": None}
+    descriptions = {"clip": None, "ocr": None, "captions": None, "rationales": None}
     if config.clip_pattern is not None:
         clip_file_path = config.clip_pattern[split]
         descriptions["clip"] = load_description_file(clip_file_path)
@@ -63,6 +85,15 @@ def load_descriptions(config, split):
         caption_file_path = config.caption_pattern[split]
         descriptions["captions"] = load_description_file(caption_file_path)
         print_rank_0(f"Loading {split} captions from {caption_file_path}")
+    if config.rationale_pattern is not None:
+        rationale_file_path = config.rationale_pattern[split]
+        with open(rationale_file_path) as file:
+            rationales = json.load(file)
+        rationales = {
+            image_id: filter_rationale(rationale, topk=config.rationale_topk, threshold=config.rationale_threshold) for
+            image_id, rationale in rationales.items()}
+        descriptions['rationales'] = rationales
+        print_rank_0(f"Loading {split} rationales from {rationale_file_path}")
     return descriptions
 
 
@@ -102,9 +133,12 @@ class VQAConfig(YAMLWizard):
     clip_pattern: Union[str, Dict[str, str]] = None  # Organize data file in groups
     ocr_pattern: Union[str, Dict[str, str]] = None
     caption_pattern: Union[str, Dict[str, str]] = None
+    rationale_pattern: Union[str, Dict[str, str]] = None
     priming: bool = False
     num_train_examples: int = 10
     train_path: str = None
+    rationale_topk: int = 5
+    rationale_threshold: float = 0.8
 
 
 @dataclass
@@ -132,7 +166,7 @@ class VQAMulDataset(MultiChoiceTaskDataset):
     def process_single_item(self, item, **kwargs):
         image_id = item["question_id"]
         prompt = build_vqa_prompt(item, entities=self.descriptions["clip"], ocr_results=self.descriptions["ocr"],
-                                  captions=self.descriptions["captions"])
+                                  captions=self.descriptions["captions"], rationales=self.descriptions["rationales"])
         if self.priming:
             prompt = self.priming_prompt + prompt
         choices = item["choices"]
