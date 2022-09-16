@@ -5,10 +5,12 @@ path: 'aokvqa_v1p0'
 file-pattern:
   validation: "aokvqa_v1p0_val.json"
 clip-pattern:
-  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_val.jsonl"
-  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_clip_test.jsonl"
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_entity_clip_val.jsonl"
+  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_entity_clip_test.jsonl"
 caption-pattern:
-  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_val.jsonl"
-  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_blip_test.jsonl"
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_caption_blip_large_caption_val.jsonl"
+  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_caption_blip_large_caption_test.jsonl"
+support-pattern:
+  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_rationale_beam_val.json"
 micro_batch_size: 6
 save_prediction: true
