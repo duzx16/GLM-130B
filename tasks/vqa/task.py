@@ -79,21 +79,21 @@ def filter_support(support, topk=5, threshold=0.8):
 
 
 def load_descriptions(config, split):
-    descriptions = {"clip": None, "ocr": None, "captions": None, "supports": None}
+    descriptions = {"clip": None, "ocr": None, "captions": None, "supports": None, "rationales": None}
     if config.clip_pattern is not None:
-        clip_file_path = config.clip_pattern[split]
+        clip_file_path = os.path.join(config.description_path, config.clip_pattern[split])
         descriptions["clip"] = load_description_file(clip_file_path)
         print_rank_0(f"Loading {split} clip descriptions from {clip_file_path}")
     if config.ocr_pattern is not None:
-        ocr_file_path = config.ocr_pattern[split]
+        ocr_file_path = os.path.join(config.description_path, config.ocr_pattern[split])
         descriptions["ocr"] = load_description_file(ocr_file_path)
         print_rank_0(f"Loading {split} OCR results from {ocr_file_path}")
     if config.caption_pattern is not None:
-        caption_file_path = config.caption_pattern[split]
+        caption_file_path = os.path.join(config.description_path, config.caption_pattern[split])
         descriptions["captions"] = load_description_file(caption_file_path)
         print_rank_0(f"Loading {split} captions from {caption_file_path}")
     if config.support_pattern is not None:
-        support_file_path = config.support_pattern[split]
+        support_file_path = os.path.join(config.description_path, config.support_pattern[split])
         with open(support_file_path) as file:
             supports = json.load(file)
         supports = {
@@ -101,9 +101,8 @@ def load_descriptions(config, split):
             image_id, support in supports.items()}
         descriptions['supports'] = supports
         print_rank_0(f"Loading {split} supports from {support_file_path}")
-    descriptions['rationales'] = None
     if config.rationale_pattern is not None and split in config.rationale_pattern:
-        rationale_file_path = config.rationale_pattern[split]
+        rationale_file_path = os.path.join(config.description_path, config.rationale_pattern[split])
         with open(rationale_file_path) as file:
             rationales = json.load(file)
         rationales = {key: value["direct_answer"][0] for key, value in rationales.items()}
@@ -149,6 +148,7 @@ def load_description_file(path):
 
 @dataclass
 class VQAConfig(YAMLWizard):
+    description_path: str = None
     clip_pattern: Union[str, Dict[str, str]] = None  # Organize data file in groups
     ocr_pattern: Union[str, Dict[str, str]] = None
     caption_pattern: Union[str, Dict[str, str]] = None
