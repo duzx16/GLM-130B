@@ -1,6 +1,6 @@
 name: 'a-okvqa'
-type: 'mul'
-module: "tasks.vqa.task.VQAMulTask"
+type: 'gen'
+module: "tasks.vqa.task.VQAGenTask"
 path: 'aokvqa_v1p0'
 file-pattern:
   validation: "aokvqa_v1p0_val.json"
@@ -12,8 +12,14 @@ caption-pattern:
   train: "/zhangpai21/workspace/zxdu/VQA/aokvqa_caption_blip_large_caption_train.jsonl"
   validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_caption_blip_large_caption_val.jsonl"
   test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_caption_blip_large_caption_test.jsonl"
-micro_batch_size: 2
-save_prediction: true
 priming: true
 num_train_examples: 10
-train_path: "/zhangpai21/workspace/zxdu/aokvqa_v1p0/aokvqa_v1p0_train.json"
+train_path: "/zhangpai21/workspace/zxdu/aokvqa_v1p0/aokvqa_v1p0_train_few.json"
+sampling_strategy: "BeamSearchStrategy"
+num_beams: 8
+max_gen_length: 32
+cot_rationale: true
+use_task_mask: true
+end_tokens: [","]
+save_prediction: true
+return_all_beams: true

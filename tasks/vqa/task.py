@@ -12,7 +12,8 @@ from typing import Dict, Union, List
 from evaluation import print_rank_0
 
 
-def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, supports=None):
+def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, supports=None, rationales=None,
+                     predict_rationale=False):
     image_id = item["question_id"]
     overall_sent = f'Please observe the image and answer the question.'
     caption_sent = None
@@ -52,7 +53,13 @@ def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, suppo
         prompts.append(support_sent)
     prompt = " ".join(prompts)
     question = item["question"]
-    prompt = prompt + question + " Answer:"
+    prompt = prompt + question
+    if predict_rationale:
+        prompt = prompt + " Because"
+    elif rationales is not None:
+        prompt = prompt + " Because " + rationales[image_id].strip(".") + ", the answer is"
+    else:
+        prompt = prompt + " Answer:"
     return prompt
 
 
@@ -93,21 +100,33 @@ def load_descriptions(config, split):
             image_id: filter_support(support, topk=config.support_topk, threshold=config.support_threshold) for
             image_id, support in supports.items()}
         descriptions['supports'] = supports
-        print_rank_0(f"Loading {split} rationales from {support_file_path}")
+        print_rank_0(f"Loading {split} supports from {support_file_path}")
+    descriptions['rationales'] = None
+    if config.rationale_pattern is not None and split in config.rationale_pattern:
+        rationale_file_path = config.rationale_pattern[split]
+        with open(rationale_file_path) as file:
+            rationales = json.load(file)
+        rationales = {key: value["direct_answer"][0] for key, value in rationales.items()}
+        descriptions['rationales'] = rationales
+        print_rank_0(f"Loading {split} rationales from {rationale_file_path}")
     return descriptions
 
 
-def build_priming_vqa_prompt(config, add_answer_period=False, add_rationale=False):
+def build_priming_vqa_prompt(config, add_answer_period=False, add_rationale=False, cot_rationale=False):
     priming_prompt = ""
     assert config.train_path is not None
     with open(config.train_path) as file:
         dataset = json.load(file)
     descriptions = load_descriptions(config, "train")
+    descriptions["rationales"] = None
+    if cot_rationale:
+        descriptions["rationales"] = {item["question_id"]: item["rationales"][0] for item in dataset}
     for item in random.sample(dataset, config.num_train_examples):
         prompt = build_vqa_prompt(item, entities=descriptions["clip"], ocr_results=descriptions["ocr"],
-                                  captions=descriptions["captions"])
+                                  captions=descriptions["captions"], supports=descriptions["supports"],
+                                  rationales=descriptions["rationales"])
         answer = item["choices"][item["correct_choice_idx"]]
-        priming_prompt += prompt + answer
+        priming_prompt += prompt + " " + answer
         if add_answer_period:
             priming_prompt += "."
         if add_rationale:
@@ -134,6 +153,7 @@ class VQAConfig(YAMLWizard):
     ocr_pattern: Union[str, Dict[str, str]] = None
     caption_pattern: Union[str, Dict[str, str]] = None
     support_pattern: Union[str, Dict[str, str]] = None
+    rationale_pattern: Union[str, Dict[str, str]] = None
     priming: bool = False
     num_train_examples: int = 10
     train_path: str = None
@@ -149,6 +169,7 @@ class VQAMulConfig(VQAConfig, MultiChoiceTaskConfig):
 @dataclass
 class VQAGenConfig(VQAConfig, GenerationTaskConfig):
     rationale_generation: bool = False
+    cot_rationale: bool = False
     pass
 
 
@@ -160,13 +181,14 @@ class VQAMulDataset(MultiChoiceTaskDataset):
         self.priming = config.priming
         self.num_train_examples = config.num_train_examples
         if self.priming:
-            self.priming_prompt = build_priming_vqa_prompt(config)
+            self.priming_prompt = build_priming_vqa_prompt(config, cot_rationale=config.rationale_pattern is not None)
         super().__init__(path, config)
 
     def process_single_item(self, item, **kwargs):
         image_id = item["question_id"]
         prompt = build_vqa_prompt(item, entities=self.descriptions["clip"], ocr_results=self.descriptions["ocr"],
-                                  captions=self.descriptions["captions"], supports=self.descriptions["supports"])
+                                  captions=self.descriptions["captions"], supports=self.descriptions["supports"],
+                                  rationales=self.descriptions["rationales"])
         if self.priming:
             prompt = self.priming_prompt + prompt
         choices = item["choices"]
@@ -205,16 +227,20 @@ class VQAGenDataset(GenerationTaskDataset):
         self.descriptions = load_descriptions(config, split)
         self.priming = config.priming
         self.rationale_generation = config.rationale_generation
+        self.cot_rationale = config.cot_rationale
         self.num_train_examples = config.num_train_examples
         if self.priming:
             self.priming_prompt = build_priming_vqa_prompt(config, add_answer_period=not self.rationale_generation,
-                                                           add_rationale=self.rationale_generation)
+                                                           add_rationale=self.rationale_generation,
+                                                           cot_rationale=self.cot_rationale or config.rationale_pattern is not None)
         super().__init__(path, config)
 
     def process_single_item(self, item, **kwargs):
         image_id = item["question_id"]
         prompt = build_vqa_prompt(item, entities=self.descriptions["clip"], ocr_results=self.descriptions["ocr"],
-                                  captions=self.descriptions["captions"], supports=self.descriptions['supports'])
+                                  captions=self.descriptions["captions"], supports=self.descriptions['supports'],
+                                  rationales=self.descriptions["rationales"],
+                                  predict_rationale=self.cot_rationale)
         if self.rationale_generation:
             dataset = []
             for choice in item["choices"]:
