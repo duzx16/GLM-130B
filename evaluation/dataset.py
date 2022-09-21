@@ -45,9 +45,9 @@ class EvaluationDataset(torch.utils.data.Dataset, ABC):
         self.max_seq_length = self.config.max_seq_length
         self.dtype = np.int64
 
-        self.tokenizer = get_tokenizer()
-        self.mask_id = self.tokenizer.get_command("[MASK]")
-        self.gmask_id = self.tokenizer.get_command("[gMASK]")
+        tokenizer = get_tokenizer(tokenizer_type="icetk-glm-130B")
+        self.mask_id = tokenizer.get_command("[MASK]")
+        self.gmask_id = tokenizer.get_command("[gMASK]")
 
         self.data = []
         for p in self.path:
@@ -61,15 +61,18 @@ class EvaluationDataset(torch.utils.data.Dataset, ABC):
         return None
 
     def process_single_file(self, path):
-        if path.endswith("jsonl"):
-            with open(os.path.join(path), "r", encoding="utf-8") as file:
-                for line in file:
-                    item = json.loads(line)
+        if not path.endswith("jsonl"):
+            try:
+                with open(os.path.join(path), "r", encoding="utf-8") as file:
+                    dataset = json.load(file)
+                for item in dataset:
                     self.data.extend(self.process_single_item(item))
-        elif path.endswith("json"):
-            with open(os.path.join(path), "r", encoding="utf-8") as file:
-                dataset = json.load(file)
-            for item in dataset:
+                return
+            except json.decoder.JSONDecodeError:
+                pass
+        with open(os.path.join(path), "r", encoding="utf-8") as file:
+            for line in file:
+                item = json.loads(line)
                 self.data.extend(self.process_single_item(item))
 
     @abstractmethod
@@ -208,11 +211,12 @@ class MultiChoiceTaskDataset(EvaluationDataset):
         }]
 
     @staticmethod
-    def build_multiple_choice_sample(text, choices, is_single_token, unified_multitask_encoding=False):
+    def build_multiple_choice_sample(text, choices, is_single_token, unified_multitask_encoding=False,
+                                     unidirectional=False, use_task_mask=False):
         tokenizer = get_tokenizer()
 
         sop_id = tokenizer.get_command("sop")
-        mask_id = tokenizer.get_command("[MASK]")
+        mask_id = tokenizer.get_command("[gMASK]") if use_task_mask else tokenizer.get_command("[MASK]")
 
         token = np.array(text, dtype=np.int64)
         target = np.array(text, dtype=np.int64)
@@ -221,15 +225,26 @@ class MultiChoiceTaskDataset(EvaluationDataset):
 
         blank_filling = mask_id in text
         if not blank_filling:
-            mask_position = len(token)
-            token = np.concatenate((token, [mask_id]))
-            target = np.concatenate((target, [mask_id]))
-            position_id = np.concatenate((position_id, [mask_position]))
+            if unidirectional:
+                assert use_task_mask
+                token = np.concatenate(([mask_id, sop_id], token[:-1]))
+                target = np.concatenate(([mask_id, sop_id], target[:-1]))
+                position_id = np.arange(len(token), dtype=np.int64)
+                mask_position = len(token)
+            else:
+                mask_position = len(token)
+                token = np.concatenate((token, [mask_id]))
+                target = np.concatenate((target, [mask_id]))
+                position_id = np.concatenate((position_id, [mask_position]))
         else:
+            assert not unidirectional, "Unidirectional attention doesn't support blank filling"
+            assert not use_task_mask, "Unidirectional attention doesn't support task mask"
             mask_position = text.index(mask_id)
 
         division = len(token)
         attention_mask = [np.ones((len(token), len(token)), dtype=np.int64)]
+        if unidirectional:
+            attention_mask[0] = np.tril(attention_mask[0])
 
         for choice in choices:
             if not choice:
@@ -238,20 +253,23 @@ class MultiChoiceTaskDataset(EvaluationDataset):
                 (
                     position_id,
                     [mask_position] * len(choice)
-                    if blank_filling or not unified_multitask_encoding
+                    if (blank_filling or not unified_multitask_encoding) and not use_task_mask
                     else np.arange(mask_position, mask_position + len(choice), dtype=np.int64),
                 )
             )
             choice_target_id.append(np.arange(len(token), len(token) + len(choice), dtype=np.int64))
             attention_mask.append(np.tril(np.ones((len(choice), len(choice)), dtype=np.int64)))
-            token = np.concatenate((token, [sop_id], choice[:-1]))
+            if unidirectional:
+                token = np.concatenate((token, [text[-1]], choice[:-1]))
+            else:
+                token = np.concatenate((token, [sop_id], choice[:-1]))
             target = np.concatenate((target, choice))
 
             if is_single_token:
                 break
 
         attention_mask = block_diag(*attention_mask)
-        attention_mask[: len(token), :division] = 1
+        attention_mask[division:, :division] = 1
 
         if is_single_token:
             choices = np.array(choices, dtype=np.int64).squeeze().tolist()
@@ -272,6 +290,8 @@ class MultiChoiceTaskDataset(EvaluationDataset):
             item["choices"],
             is_single_token=self.is_single_token,
             unified_multitask_encoding=self.config.use_multitask_encoding,
+            unidirectional=self.config.unidirectional,
+            use_task_mask=self.config.use_task_mask,
         )
         sample["label"] = item["label"]
         return sample
