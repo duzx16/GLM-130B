@@ -6,8 +6,8 @@ file-pattern:
   validation: "aokvqa_v1p0_val.json"
 description-path: "/group/30042/zhengxiaodu/VQA"
 clip-pattern:
-  validation: "aokvqa_entity_clip_val.jsonl"
-  test: "aokvqa_entity_clip_test.jsonl"
+  validation: "aokvqa_entity_clip_vg_val.jsonl"
+  test: "aokvqa_entity_clip_vg_test.jsonl"
 caption-pattern:
   validation: "aokvqa_caption_blip_large_caption_val.jsonl"
   test: "aokvqa_caption_blip_large_caption_test.jsonl"

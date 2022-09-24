@@ -14,7 +14,8 @@ from evaluation import print_rank_0
 
 def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, supports=None, rationales=None,
                      predict_rationale=False):
-    image_id = item["question_id"]
+    image_id = item["image_id"]
+    question_id = item["question_id"]
     overall_sent = f'Please observe the image and answer the question.'
     caption_sent = None
     if captions is not None:
@@ -37,7 +38,7 @@ def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, suppo
             ocr_sent = f'The texts in the image include {texts}.'
     support_sent = None
     if supports is not None:
-        support_sents = supports[image_id]
+        support_sents = supports[question_id]
         if support_sents:
             support_sent = ". ".join(support_sents) + "."
     prompts = [overall_sent]
@@ -148,6 +149,7 @@ def load_description_file(path):
 
 @dataclass
 class VQAConfig(YAMLWizard):
+    dataset_name: str = "aokvqa"
     description_path: str = None
     clip_pattern: Union[str, Dict[str, str]] = None  # Organize data file in groups
     ocr_pattern: Union[str, Dict[str, str]] = None
@@ -171,6 +173,25 @@ class VQAGenConfig(VQAConfig, GenerationTaskConfig):
     rationale_generation: bool = False
     cot_rationale: bool = False
     pass
+
+
+def process_vqa_item(item, dataset_name="aokvqa"):
+    if dataset_name == "aokvqa":
+        return item
+    elif dataset_name == "vcr":
+        def process_tokenized_input(words):
+            words = [" and".join(word) if isinstance(word, list) else word for word in words]
+            words = " ".join(words)
+            return words
+
+        new_item = {"image_id": item["img_id"], "question_id": item["annot_id"]}
+        question = process_tokenized_input(item["question"])
+        new_item["question"] = question
+        choices = [process_tokenized_input(choice) for choice in item["answer_choices"]]
+        new_item["choices"] = choices
+        return new_item
+    else:
+        raise NotImplementedError
 
 
 class VQAMulDataset(MultiChoiceTaskDataset):
