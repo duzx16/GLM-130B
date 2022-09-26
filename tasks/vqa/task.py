@@ -149,7 +149,6 @@ def load_description_file(path):
 
 @dataclass
 class VQAConfig(YAMLWizard):
-    dataset_name: str = "aokvqa"
     description_path: str = None
     clip_pattern: Union[str, Dict[str, str]] = None  # Organize data file in groups
     ocr_pattern: Union[str, Dict[str, str]] = None
@@ -176,12 +175,27 @@ class VQAGenConfig(VQAConfig, GenerationTaskConfig):
 
 
 def process_vqa_item(item, dataset_name="aokvqa"):
-    if dataset_name == "aokvqa":
+    if "a-okvqa" in dataset_name:
         return item
-    elif dataset_name == "vcr":
+    elif "vcr" in dataset_name:
+        def vcr_detokenizer(string):
+            string = (
+                string.replace(" .", ".")
+                .replace(" ?", "?")
+                .replace(" !", "!")
+                .replace(" ,", ",")
+                .replace(" ' ", "'")
+                .replace(" n't", "n't")
+                .replace(" 'm", "'m")
+                .replace(" 's", "'s")
+                .replace(" 've", "'ve")
+                .replace(" 're", "'re")
+            )
+            return string
         def process_tokenized_input(words):
-            words = [" and".join(word) if isinstance(word, list) else word for word in words]
+            words = [" and".join(list(map(str, word))) if isinstance(word, list) else word for word in words]
             words = " ".join(words)
+            words = vcr_detokenizer(words)
             return words
 
         new_item = {"image_id": item["img_id"], "question_id": item["annot_id"]}
@@ -206,6 +220,7 @@ class VQAMulDataset(MultiChoiceTaskDataset):
         super().__init__(path, config)
 
     def process_single_item(self, item, **kwargs):
+        item = process_vqa_item(item, dataset_name=self.config.name)
         image_id = item["question_id"]
         prompt = build_vqa_prompt(item, entities=self.descriptions["clip"], ocr_results=self.descriptions["ocr"],
                                   captions=self.descriptions["captions"], supports=self.descriptions["supports"],
@@ -237,7 +252,9 @@ class VQAMulTask(MultiChoiceTask):
         results = {}
         for prediction, item in zip(predictions, data):
             results[item["image_id"]] = {"multiple_choice": item["choices_pretokenized"][prediction]}
-        with open("outputs/prediction_mul_" + datetime.now().strftime('%m-%d-%H-%M_') + file, "w") as output:
+        file_name = file.split(".")[0]
+        with open("outputs/prediction_mul_" + datetime.now().strftime(
+                '%m-%d-%H-%M_') + self.config.name + "_" + file_name + ".json", "w") as output:
             json.dump(results, output)
 
 
@@ -312,5 +329,7 @@ class VQAGenTask(GenerationTask):
             prefix = "prediction_rationale_"
         else:
             prefix = "prediction_gen_"
-        with open(os.path.join("outputs", prefix + datetime.now().strftime('%m-%d-%H-%M_') + file), "w") as output:
+        file_name = file.split(".")[0]
+        with open(os.path.join("outputs", prefix + datetime.now().strftime(
+                '%m-%d-%H-%M_') + self.config.name + "_" + file_name + ".json"), "w") as output:
             json.dump(results, output)
