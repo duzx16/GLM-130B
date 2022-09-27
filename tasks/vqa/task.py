@@ -12,23 +12,28 @@ from typing import Dict, Union, List
 from evaluation import print_rank_0
 
 
-def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, supports=None, rationales=None,
-                     predict_rationale=False):
+def build_vqa_prompt(item, descriptions, predict_rationale=False):
     image_id = item["image_id"]
     question_id = item["question_id"]
     overall_sent = f'Please observe the image and answer the question.'
+    entities = descriptions["clip"]
+    ocr_results = descriptions["ocr"]
+    captions = descriptions["captions"]
+    supports = descriptions["supports"]
+    rationales = descriptions["rationales"]
+    object_entities = descriptions["object_clip"]
     caption_sent = None
     if captions is not None:
         caption = captions[image_id]["caption"]
         caption_sent = f"This image is {caption}"
-    scene_sent, object_sent = None, None
+    scene_sent, entity_sent = None, None
     if entities is not None:
         description = entities[image_id]
         img_type, sorted_places = description["img_type"], description["sorted_places"]
-        object_list = description["object_list"]
-        object_result = ", ".join(object_list)
+        entity_list = description["object_list"]
+        entity_result = ", ".join(entity_list)
         scene_sent = f'I think this image was taken at a {sorted_places[0]}, {sorted_places[1]}, or {sorted_places[2]}.'
-        object_sent = f'I think there might be a {object_result} in this {img_type}.'
+        entity_sent = f'I think there might be a {entity_result} in this {img_type}.'
     ocr_sent = None
     if ocr_results is not None:
         ocr_result = ocr_results[image_id]
@@ -41,6 +46,18 @@ def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, suppo
         support_sents = supports[question_id]
         if support_sents:
             support_sent = ". ".join(support_sents) + "."
+    object_sent = None
+    if object_entities is not None:
+        object_sents = []
+        for o in item["objects"]:
+            object_id = f"{image_id}/{o}"
+            obj_entity_list = object_entities[object_id]["object_list"]
+            obj_attribute_list = object_entities[object_id]["attribute_list"]
+            obj_entity_result = ", ".join(obj_entity_list[:3])
+            obj_attribute_result = ", ".join(obj_attribute_list[:3])
+            object_sent = f'{o} might be a {obj_entity_result}. {o} might be {obj_attribute_result}'
+            object_sents.append(object_sent)
+        object_sent = ". ".join(object_sents) + "."
     prompts = [overall_sent]
     if caption_sent is not None:
         prompts.append(caption_sent)
@@ -48,6 +65,8 @@ def build_vqa_prompt(item, entities=None, ocr_results=None, captions=None, suppo
         prompts.append(scene_sent)
     if ocr_sent is not None:
         prompts.append(ocr_sent)
+    if entity_sent is not None:
+        prompts.append(entity_sent)
     if object_sent is not None:
         prompts.append(object_sent)
     if support_sent is not None:
@@ -80,7 +99,8 @@ def filter_support(support, topk=5, threshold=0.8):
 
 
 def load_descriptions(config, split):
-    descriptions = {"clip": None, "ocr": None, "captions": None, "supports": None, "rationales": None}
+    descriptions = {"clip": None, "ocr": None, "captions": None, "supports": None, "rationales": None,
+                    "object_clip": None}
     if config.clip_pattern is not None:
         clip_file_path = os.path.join(config.description_path, config.clip_pattern[split])
         descriptions["clip"] = load_description_file(clip_file_path)
@@ -93,6 +113,10 @@ def load_descriptions(config, split):
         caption_file_path = os.path.join(config.description_path, config.caption_pattern[split])
         descriptions["captions"] = load_description_file(caption_file_path)
         print_rank_0(f"Loading {split} captions from {caption_file_path}")
+    if config.object_clip_pattern is not None:
+        object_clip_file_path = os.path.join(config.description_path, config.object_clip_pattern[split])
+        descriptions["object_clip"] = load_description_file(object_clip_file_path)
+        print_rank_0(f"Loading {split} object clip descriptions from {object_clip_file_path}")
     if config.support_pattern is not None:
         support_file_path = os.path.join(config.description_path, config.support_pattern[split])
         with open(support_file_path) as file:
@@ -112,21 +136,35 @@ def load_descriptions(config, split):
     return descriptions
 
 
+def read_dataset(path):
+    if not path.endswith("jsonl"):
+        try:
+            with open(os.path.join(path), "r", encoding="utf-8") as file:
+                dataset = json.load(file)
+            return dataset
+        except json.decoder.JSONDecodeError:
+            pass
+    dataset = []
+    with open(os.path.join(path), "r", encoding="utf-8") as file:
+        for line in file:
+            item = json.loads(line)
+            dataset.append(item)
+    return dataset
+
+
 def build_priming_vqa_prompt(config, add_answer_period=False, add_rationale=False, cot_rationale=False):
     priming_prompt = ""
     assert config.train_path is not None
-    with open(config.train_path) as file:
-        dataset = json.load(file)
+    dataset = read_dataset(config.train_path)
     descriptions = load_descriptions(config, "train")
     descriptions["rationales"] = None
     if cot_rationale:
         descriptions["rationales"] = {item["question_id"]: item["rationales"][0] for item in dataset}
     for item in random.sample(dataset, config.num_train_examples):
-        prompt = build_vqa_prompt(item, entities=descriptions["clip"], ocr_results=descriptions["ocr"],
-                                  captions=descriptions["captions"], supports=descriptions["supports"],
-                                  rationales=descriptions["rationales"])
+        item = process_vqa_item(item, dataset_name=config.name)
+        prompt = build_vqa_prompt(item, descriptions)
         answer = item["choices"][item["correct_choice_idx"]]
-        priming_prompt += prompt + " " + answer
+        priming_prompt += prompt + " " + answer.strip(".")
         if add_answer_period:
             priming_prompt += "."
         if add_rationale:
@@ -151,6 +189,7 @@ def load_description_file(path):
 class VQAConfig(YAMLWizard):
     description_path: str = None
     clip_pattern: Union[str, Dict[str, str]] = None  # Organize data file in groups
+    object_clip_pattern: Union[str, Dict[str, str]] = None
     ocr_pattern: Union[str, Dict[str, str]] = None
     caption_pattern: Union[str, Dict[str, str]] = None
     support_pattern: Union[str, Dict[str, str]] = None
@@ -193,16 +232,29 @@ def process_vqa_item(item, dataset_name="aokvqa"):
             )
             return string
         def process_tokenized_input(words):
-            words = [" and".join(list(map(str, word))) if isinstance(word, list) else word for word in words]
-            words = " ".join(words)
+            if not isinstance(words, str):
+                words = [" and ".join(list(map(str, word))) if isinstance(word, list) else word for word in words]
+                words = " ".join(words)
             words = vcr_detokenizer(words)
             return words
 
-        new_item = {"image_id": item["img_id"], "question_id": item["annot_id"]}
+        new_item = {"image_id": item["img_id"], "question_id": item["annot_id"],
+                    "correct_choice_idx": item["answer_label"]}
         question = process_tokenized_input(item["question"])
         new_item["question"] = question
         choices = [process_tokenized_input(choice) for choice in item["answer_choices"]]
         new_item["choices"] = choices
+        objects = set()
+        for word in item["question"]:
+            if isinstance(word, list):
+                objects.update(word)
+        for choice in item["answer_choices"]:
+            for word in choice:
+                if isinstance(word, list):
+                    objects.update(word)
+        new_item["objects"] = list(objects)
+        if "rationale" in item:
+            new_item["rationales"] = [item["rationale"]]
         return new_item
     else:
         raise NotImplementedError
@@ -222,9 +274,7 @@ class VQAMulDataset(MultiChoiceTaskDataset):
     def process_single_item(self, item, **kwargs):
         item = process_vqa_item(item, dataset_name=self.config.name)
         image_id = item["question_id"]
-        prompt = build_vqa_prompt(item, entities=self.descriptions["clip"], ocr_results=self.descriptions["ocr"],
-                                  captions=self.descriptions["captions"], supports=self.descriptions["supports"],
-                                  rationales=self.descriptions["rationales"])
+        prompt = build_vqa_prompt(item, self.descriptions)
         if self.priming:
             prompt = self.priming_prompt + prompt
         choices = item["choices"]
@@ -251,7 +301,12 @@ class VQAMulTask(MultiChoiceTask):
     def save_prediction_to_file(self, file, predictions, data):
         results = {}
         for prediction, item in zip(predictions, data):
-            results[item["image_id"]] = {"multiple_choice": item["choices_pretokenized"][prediction]}
+            if "a-okvqa" in self.config.name:
+                results[item["image_id"]] = {"multiple_choice": item["choices_pretokenized"][prediction]}
+            elif "vcr" in self.config.name:
+                results[item["image_id"]] = {"multiple_choice": prediction}
+            else:
+                raise NotImplementedError(self.config.name)
         file_name = file.split(".")[0]
         with open("outputs/prediction_mul_" + datetime.now().strftime(
                 '%m-%d-%H-%M_') + self.config.name + "_" + file_name + ".json", "w") as output:
@@ -274,11 +329,11 @@ class VQAGenDataset(GenerationTaskDataset):
         super().__init__(path, config)
 
     def process_single_item(self, item, **kwargs):
+        if random.random() > 0.1:
+            return []
+        item = process_vqa_item(item, dataset_name=self.config.name)
         image_id = item["question_id"]
-        prompt = build_vqa_prompt(item, entities=self.descriptions["clip"], ocr_results=self.descriptions["ocr"],
-                                  captions=self.descriptions["captions"], supports=self.descriptions['supports'],
-                                  rationales=self.descriptions["rationales"],
-                                  predict_rationale=self.cot_rationale)
+        prompt = build_vqa_prompt(item, self.descriptions, predict_rationale=self.cot_rationale)
         if self.rationale_generation:
             dataset = []
             for choice in item["choices"]:

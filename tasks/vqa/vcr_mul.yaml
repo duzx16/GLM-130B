@@ -1,0 +1,17 @@
+name: 'vcr'
+type: 'mul'
+module: "tasks.vqa.task.VQAMulTask"
+path: 'vcr1annots'
+file-pattern:
+  validation: "val.jsonl"
+description-path: "/group/30042/zhengxiaodu/VQA"
+clip-pattern:
+  train: "vcr_entity_clip_visual_genome_train.jsonl"
+  validation: "vcr_entity_clip_visual_genome_val.jsonl"
+  test: "vcr_entity_clip_visual_genome_test.jsonl"
+caption-pattern:
+  train: "vcr_caption_blip_large_caption_train.jsonl"
+  validation: "vcr_caption_blip_large_caption_val.jsonl"
+  test: "vcr_caption_blip_large_caption_test.jsonl"
+micro_batch_size: 2
+save_prediction: true
