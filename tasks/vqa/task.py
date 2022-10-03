@@ -22,6 +22,7 @@ def build_vqa_prompt(item, descriptions, predict_rationale=False):
     supports = descriptions["supports"]
     rationales = descriptions["rationales"]
     object_entities = descriptions["object_clip"]
+    object_captions = descriptions["object_captions"]
     caption_sent = None
     if captions is not None:
         caption = captions[image_id]["caption"]
@@ -41,23 +42,30 @@ def build_vqa_prompt(item, descriptions, predict_rationale=False):
             texts = sorted(ocr_result["texts"], key=lambda x: x["confidence"], reverse=True)
             texts = ", ".join([f'"{item["text"]}"' for item in texts[:5]])
             ocr_sent = f'The texts in the image include {texts}.'
+    object_sent = None
+    if object_entities is not None or object_captions is not None:
+        object_sents = []
+        for o in item["objects"]:
+            object_id = f"{image_id}/{o}"
+            object_sent = []
+            if object_entities is not None:
+                obj_entity_list = object_entities[object_id]["object_list"]
+                obj_attribute_list = object_entities[object_id]["attribute_list"]
+                obj_entity_result = ", ".join(obj_entity_list[:3])
+                obj_attribute_result = ", ".join(obj_attribute_list[:3])
+                object_sent.append(f"{o} might be a {obj_entity_result}")
+                object_sent.append(f'{o} might be {obj_attribute_result}')
+            if object_captions is not None:
+                obj_caption = object_captions[object_id]['caption'][0]
+                object_sent.append(f'{o} might be {obj_caption}')
+            object_sent = ". ".join(object_sent)
+            object_sents.append(object_sent)
+        object_sent = ". ".join(object_sents) + "."
     support_sent = None
     if supports is not None:
         support_sents = supports[question_id]
         if support_sents:
             support_sent = ". ".join(support_sents) + "."
-    object_sent = None
-    if object_entities is not None:
-        object_sents = []
-        for o in item["objects"]:
-            object_id = f"{image_id}/{o}"
-            obj_entity_list = object_entities[object_id]["object_list"]
-            obj_attribute_list = object_entities[object_id]["attribute_list"]
-            obj_entity_result = ", ".join(obj_entity_list[:3])
-            obj_attribute_result = ", ".join(obj_attribute_list[:3])
-            object_sent = f'{o} might be a {obj_entity_result}. {o} might be {obj_attribute_result}'
-            object_sents.append(object_sent)
-        object_sent = ". ".join(object_sents) + "."
     prompts = [overall_sent]
     if caption_sent is not None:
         prompts.append(caption_sent)
@@ -100,7 +108,7 @@ def filter_support(support, topk=5, threshold=0.8):
 
 def load_descriptions(config, split):
     descriptions = {"clip": None, "ocr": None, "captions": None, "supports": None, "rationales": None,
-                    "object_clip": None}
+                    "object_clip": None, "object_captions": None}
     if config.clip_pattern is not None:
         clip_file_path = os.path.join(config.description_path, config.clip_pattern[split])
         descriptions["clip"] = load_description_file(clip_file_path)
@@ -117,6 +125,10 @@ def load_descriptions(config, split):
         object_clip_file_path = os.path.join(config.description_path, config.object_clip_pattern[split])
         descriptions["object_clip"] = load_description_file(object_clip_file_path)
         print_rank_0(f"Loading {split} object clip descriptions from {object_clip_file_path}")
+    if config.object_caption_pattern is not None:
+        object_caption_file_path = os.path.join(config.description_path, config.object_caption_pattern[split])
+        descriptions["object_captions"] = load_description_file(object_caption_file_path)
+        print_rank_0(f"Loading {split} object caption descriptions from {object_caption_file_path}")
     if config.support_pattern is not None:
         support_file_path = os.path.join(config.description_path, config.support_pattern[split])
         with open(support_file_path) as file:
@@ -192,6 +204,7 @@ class VQAConfig(YAMLWizard):
     object_clip_pattern: Union[str, Dict[str, str]] = None
     ocr_pattern: Union[str, Dict[str, str]] = None
     caption_pattern: Union[str, Dict[str, str]] = None
+    object_caption_pattern: Union[str, Dict[str, str]] = None
     support_pattern: Union[str, Dict[str, str]] = None
     rationale_pattern: Union[str, Dict[str, str]] = None
     priming: bool = False

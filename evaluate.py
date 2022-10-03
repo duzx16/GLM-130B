@@ -15,6 +15,8 @@ def add_evaluation_specific_args(parser):
     # Task
     group.add_argument("--task", nargs="+", default=[], help="All task config to evaluation")
     group.add_argument("--data-path", type=str, required=True, help="Data dir path for all tasks")
+    group.add_argument("--support-topk", type=int, default=None)
+    group.add_argument("--support-threshold", type=float, default=None)
     return parser
 
 
@@ -28,10 +30,14 @@ def find_all_tasks(all_task_config_path):
     return tasks
 
 
-def evaluate_all_tasks(data_path, model, tokenizer, all_task_config_path, task_classes):
+def evaluate_all_tasks(data_path, model, tokenizer, all_task_config_path, task_classes, args):
     for config_path, task_class in zip(all_task_config_path, task_classes):
         config = task_class.config_class().from_yaml_file(config_path)
         config.path = join(data_path, config.path)
+        if args.support_topk is not None:
+            config.support_topk = args.support_topk
+        if args.support_threshold is not None:
+            config.support_threshold = args.support_threshold
         task = task_class(model, tokenizer, config)
         task.evaluate()
 
@@ -59,7 +65,7 @@ def main():
     model = ModelForEvaluation(model)
 
     start = time.time()
-    evaluate_all_tasks(args.data_path, model, tokenizer, args.task, task_classes)
+    evaluate_all_tasks(args.data_path, model, tokenizer, args.task, task_classes, args)
     print_rank_0(f"Finish {len(task_classes)} task{'s' if len(task_classes) > 1 else ''} in {time.time() - start:.1f}s")
 
 
