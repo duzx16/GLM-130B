@@ -185,7 +185,7 @@ class GenerationTask(BaseTask, ABC):
                 end_tokens.append(self.tokenizer.tokenize(token)[-1])
             print_rank_0(f"End tokens {end_tokens}")
         if self.config.sampling_strategy == "BaseStrategy":
-            self.strategy = BaseStrategy(temperature=1.0, top_k=1, end_tokens=end_tokens)
+            self.strategy = BaseStrategy(temperature=self.config.temperature, top_k=1, end_tokens=end_tokens)
         elif self.config.sampling_strategy == "BeamSearchStrategy":
             self.strategy = BeamSearchStrategy(
                 self.config.num_beams,
@@ -194,7 +194,8 @@ class GenerationTask(BaseTask, ABC):
                 end_tokens=end_tokens,
                 no_repeat_ngram_size=self.config.no_repeat_ngram_size,
                 min_gen_length=self.config.min_gen_length,
-                deterministic=self.config.deterministic,  # For evaluation, we need a determined generation strategy
+                deterministic=self.config.deterministic,  # Change to stochastic for rationale generation
+                temperature=self.config.temperature,
             )
         else:
             raise ValueError(f"unknown strategy {self.config.sampling_strategy}")

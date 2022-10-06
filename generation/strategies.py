@@ -13,6 +13,7 @@ class BeamSearchStrategy:
         no_repeat_ngram_size=0,
         min_gen_length=0,
         deterministic=False,
+        temperature=1.0,
     ):
         self.num_beams = num_beams
         self.length_penalty = length_penalty
@@ -22,6 +23,7 @@ class BeamSearchStrategy:
         self.invalid_slices = invalid_slices
         self.consider_end = consider_end
         self.deterministic = deterministic
+        self.temperature = temperature
         self._init_cache()
 
     def _init_cache(self):
@@ -65,7 +67,8 @@ class BeamSearchStrategy:
         next_token_scores = next_token_scores + prev_scores
 
         next_token_scores = next_token_scores.view(batch_size * vocab_size)
-
+        if self.temperature is not None:
+            next_token_scores = next_token_scores / self.temperature
         probs = F.softmax(next_token_scores, dim=0)
         if mems.shape[1] < batch_size:  # First token
             probs = probs[:vocab_size]
