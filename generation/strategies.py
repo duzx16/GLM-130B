@@ -16,7 +16,6 @@ class BaseStrategy:
             end_tokens = []
         self.end_tokens = end_tokens
         self.deterministic = deterministic
-        print(self.deterministic)
         self._is_done = np.zeros(self.batch_size, dtype=np.bool)
 
     @property
@@ -65,6 +64,7 @@ class BeamSearchStrategy:
         no_repeat_ngram_size=0,
         min_gen_length=0,
         deterministic=False,
+        temperature=1.0,
     ):
         self.batch_size = batch_size
         self.num_beams = num_beams
@@ -75,6 +75,7 @@ class BeamSearchStrategy:
         self.invalid_slices = invalid_slices
         self.consider_end = consider_end
         self.deterministic = deterministic
+        self.temperature = temperature
         self._init_cache()
 
     def _init_cache(self):
@@ -123,6 +124,8 @@ class BeamSearchStrategy:
         next_token_scores = next_token_scores + prev_scores
 
         next_token_scores = next_token_scores.view(batch_size, num_beams * vocab_size)
+        if self.temperature is not None:
+            next_token_scores = next_token_scores / self.temperature
 
         probs = F.softmax(next_token_scores, dim=-1)
         if num_beams < self.num_beams:  # First token
