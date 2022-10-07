@@ -86,7 +86,8 @@ def build_vqa_prompt(item, descriptions, predict_rationale=False):
     if predict_rationale:
         prompt = prompt + " Because"
     elif rationales is not None:
-        prompt = prompt + " Because " + rationales[image_id].strip(".") + ", the answer is"
+        rationale = rationales[question_id].strip(".")
+        prompt = prompt + " Because " + rationale[0].lower() + rationale[1:] + ", the answer is"
     else:
         prompt = prompt + " Answer:"
     return prompt
@@ -165,7 +166,7 @@ def read_dataset(path):
     return dataset
 
 
-def build_priming_vqa_prompt(config, add_answer_period=False, add_rationale=False, cot_rationale=False):
+def build_priming_vqa_prompt(config, add_rationale=False, cot_rationale=False):
     priming_prompt = ""
     assert config.train_path is not None
     dataset = read_dataset(config.train_path)
@@ -178,11 +179,9 @@ def build_priming_vqa_prompt(config, add_answer_period=False, add_rationale=Fals
         prompt = build_vqa_prompt(item, descriptions)
         answer = item["choices"][item["correct_choice_idx"]]
         priming_prompt += prompt + " " + answer.strip(".")
-        if add_answer_period:
-            priming_prompt += "."
         if add_rationale:
-            priming_prompt += ", because in this image, " + random.choice(item["rationales"]).strip(".") + "."
-        priming_prompt += " "
+            priming_prompt += ", because in this image, " + random.choice(item["rationales"]).strip(".")
+        priming_prompt += ". "
     tokenizer = get_tokenizer()
     prompt_length = len(tokenizer.tokenize(priming_prompt))
     print_rank_0(f"Priming prompt length {prompt_length}, content: {priming_prompt}")
@@ -350,14 +349,11 @@ class VQAGenDataset(GenerationTaskDataset):
         self.cot_rationale = config.cot_rationale
         self.num_train_examples = config.num_train_examples
         if self.priming:
-            self.priming_prompt = build_priming_vqa_prompt(config, add_answer_period=not self.rationale_generation,
-                                                           add_rationale=self.rationale_generation,
+            self.priming_prompt = build_priming_vqa_prompt(config, add_rationale=self.rationale_generation,
                                                            cot_rationale=self.cot_rationale or config.rationale_pattern is not None)
         super().__init__(path, config)
 
     def process_single_item(self, item, **kwargs):
-        if random.random() > 0.1:
-            return []
         item = process_vqa_item(item, dataset_name=self.config.name)
         image_id = item["question_id"]
         prompt = build_vqa_prompt(item, self.descriptions, predict_rationale=self.cot_rationale)
