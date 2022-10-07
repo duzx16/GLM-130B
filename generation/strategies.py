@@ -1,5 +1,53 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
+from SwissArmyTransformer.generation.sampling_strategies.base_strategy import top_k_logits
+
+class BaseStrategy:
+    def __init__(self, invalid_slices=[], temperature=1., top_k=200, eps=1e-4, top_p=0.0, num_beams=1, end_tokens=None):
+        self.invalid_slices = invalid_slices
+        self.temperature = temperature
+        self.topk = top_k
+        self.top_p = top_p
+        self.eps = eps
+        if end_tokens is None:
+            end_tokens = []
+        self.end_tokens = end_tokens
+        self.num_beams = num_beams
+        self._is_done = np.zeros(self.num_beams, dtype=np.bool)
+        self.stop_indices = [None for _ in range(self.num_beams)]
+
+    @property
+    def is_done(self) -> bool:
+        return self._is_done.all()
+
+    def forward(self, logits, tokens, mems, temperature=None):
+        if temperature is None:
+            temperature = self.temperature
+        logits = logits / temperature
+        for invalid_slice in self.invalid_slices:
+            logits[..., invalid_slice] = -65504
+
+        logits = top_k_logits(logits, self.topk, self.top_p)
+        probs = F.softmax(logits.float(), dim=-1)  # float is essetial, due to a bug in Pytorch
+        preds = torch.multinomial(probs, num_samples=1)
+        for i, pred in enumerate(preds):
+            if not self._is_done[i] and pred.item() in self.end_tokens:
+                self._is_done[i] = True
+                self.stop_indices[i] = tokens.shape[-1]
+        tokens = torch.cat((tokens, preds.view(tokens.shape[0], 1)), dim=1)
+        return tokens, mems
+
+    def finalize(self, tokens, mems):
+        new_tokens = []
+        for i, output in enumerate(tokens):
+            if self.stop_indices[i] is not None:
+                new_tokens.append(output[:self.stop_indices[i]])
+            else:
+                new_tokens.append(output)
+        self._is_done = np.zeros(self.num_beams, dtype=np.bool)
+        self.stop_indices = [None for _ in range(self.num_beams)]
+        return new_tokens, mems
 
 
 class BeamSearchStrategy:
