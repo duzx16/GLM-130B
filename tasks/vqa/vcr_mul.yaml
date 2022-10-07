@@ -1,9 +1,9 @@
-name: 'vcr'
+name: 'vcr_subset_evidence'
 type: 'mul'
 module: "tasks.vqa.task.VQAMulTask"
 path: 'vcr1annots'
 file-pattern:
-  validation: "val.jsonl"
+  validation: "val_subset.jsonl"
 description-path: "/group/30042/zhengxiaodu/VQA"
 clip-pattern:
   train: "vcr_entity_clip_visual_genome_train.jsonl"
@@ -13,5 +13,14 @@ caption-pattern:
   train: "vcr_caption_blip_large_caption_train.jsonl"
   validation: "vcr_caption_blip_large_caption_val.jsonl"
   test: "vcr_caption_blip_large_caption_test.jsonl"
+object-clip-pattern:
+  train: "vcr_object_entity_clip_visual_genome_train.jsonl"
+  validation: "vcr_object_entity_clip_visual_genome_val.jsonl"
+  test: "vcr_object_entity_clip_visual_genome_test.jsonl"
+support-pattern:
+  validation: "vcr_choice_matching_val.json"
+replace_object: true
+support_topk: 1
+support_threshold: 0.0
 micro_batch_size: 2
 save_prediction: true

@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import random
 import torch
 from datetime import datetime
@@ -99,7 +100,7 @@ def filter_support(support, topk=5, threshold=0.8):
             sentences.append(sent)
             values.append(value)
     values = torch.tensor(values)
-    top_values, top_indices = torch.topk(values, k=topk, dim=-1)
+    top_values, top_indices = torch.topk(values, k=min(len(sentences), topk), dim=-1)
     for value, idx in zip(reversed(top_values.tolist()), reversed(top_indices.tolist())):
         if value > threshold:
             support_sents.append(sentences[idx])
@@ -201,9 +202,9 @@ def load_description_file(path):
 class VQAConfig(YAMLWizard):
     description_path: str = None
     clip_pattern: Union[str, Dict[str, str]] = None  # Organize data file in groups
-    object_clip_pattern: Union[str, Dict[str, str]] = None
     ocr_pattern: Union[str, Dict[str, str]] = None
     caption_pattern: Union[str, Dict[str, str]] = None
+    object_clip_pattern: Union[str, Dict[str, str]] = None
     object_caption_pattern: Union[str, Dict[str, str]] = None
     support_pattern: Union[str, Dict[str, str]] = None
     rationale_pattern: Union[str, Dict[str, str]] = None
@@ -212,6 +213,7 @@ class VQAConfig(YAMLWizard):
     train_path: str = None
     support_topk: int = 5
     support_threshold: float = 0.8
+    replace_object: bool = False
 
 
 @dataclass
@@ -273,6 +275,15 @@ def process_vqa_item(item, dataset_name="aokvqa"):
         raise NotImplementedError
 
 
+def replace_object_indices(text, objects):
+    obj_sequence = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i, obj in enumerate(objects):
+        if i < len(obj_sequence):
+            text = re.sub(r"\b" + str(obj), obj_sequence[i], text)
+            text = re.sub(r"\." + str(obj), "." + obj_sequence[i], text)
+    return text
+
+
 class VQAMulDataset(MultiChoiceTaskDataset):
     config: VQAMulConfig
 
@@ -291,6 +302,9 @@ class VQAMulDataset(MultiChoiceTaskDataset):
         if self.priming:
             prompt = self.priming_prompt + prompt
         choices = item["choices"]
+        if self.config.replace_object:
+            prompt = replace_object_indices(prompt, item["objects"])
+            choices = [replace_object_indices(choice, item["objects"]) for choice in choices]
         if 'correct_choice_idx' in item:
             label = item["correct_choice_idx"]
         else:
