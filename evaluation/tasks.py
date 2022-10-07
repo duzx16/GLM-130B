@@ -185,7 +185,8 @@ class GenerationTask(BaseTask, ABC):
                 end_tokens.append(self.tokenizer.tokenize(token)[-1])
             print_rank_0(f"End tokens {end_tokens}")
         if self.config.sampling_strategy == "BaseStrategy":
-            self.strategy = BaseStrategy(temperature=self.config.temperature, top_k=1, end_tokens=end_tokens)
+            self.strategy = BaseStrategy(temperature=self.config.temperature, top_k=self.config.topk,
+                                         end_tokens=end_tokens)
         elif self.config.sampling_strategy == "BeamSearchStrategy":
             self.strategy = BeamSearchStrategy(
                 self.config.num_beams,
