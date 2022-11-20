@@ -39,7 +39,7 @@ def build_prompt(examples, task_name, chain_of_thought=True, prompt_type=None):
     for i, item in enumerate(examples):
         question, answer = item["question"], item["answer"]
         if not chain_of_thought:
-            answer = extract_answer(answer, task_name)
+            answer = extract_answer(answer, task_name) + "."
         if prompt_type == "number":
             prompts.append(f"{i+1}. Question: {question} Answer: {answer}")
         else:
