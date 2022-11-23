@@ -292,6 +292,7 @@ class VQAMulDataset(MultiChoiceTaskDataset):
         self.num_train_examples = config.num_train_examples
         if self.priming:
             self.priming_prompt = build_priming_vqa_prompt(config, cot_rationale=config.rationale_pattern is not None)
+        self.printed_count = 0
         super().__init__(path, config)
 
     def process_single_item(self, item, **kwargs):
@@ -304,6 +305,10 @@ class VQAMulDataset(MultiChoiceTaskDataset):
         if self.config.replace_object:
             prompt = replace_object_indices(prompt, item["objects"])
             choices = [replace_object_indices(choice, item["objects"]) for choice in choices]
+        if self.printed_count < 3:
+            self.printed_count += 1
+            print_rank_0(prompt)
+            print_rank_0(choices)
         if 'correct_choice_idx' in item:
             label = item["correct_choice_idx"]
         else:

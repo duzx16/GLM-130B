@@ -2,18 +2,15 @@ name: 'a-okvqa'
 type: 'mul'
 module: "tasks.vqa.task.VQAMulTask"
 path: 'aokvqa_v1p0'
+description-path: "/zhangpai21/workspace/zxdu/VQA"
 file-pattern:
   validation: "aokvqa_v1p0_val.json"
-clip-pattern:
-  train: "/zhangpai21/workspace/zxdu/VQA/aokvqa_entity_clip_train.jsonl"
-  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_entity_clip_val.jsonl"
-  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_entity_clip_test.jsonl"
 caption-pattern:
-  train: "/zhangpai21/workspace/zxdu/VQA/aokvqa_caption_blip_large_caption_train.jsonl"
-  validation: "/zhangpai21/workspace/zxdu/VQA/aokvqa_caption_blip_large_caption_val.jsonl"
-  test: "/zhangpai21/workspace/zxdu/VQA/aokvqa_caption_blip_large_caption_test.jsonl"
+  train: "aokvqa_caption_blip_large_caption_train.jsonl"
+  validation: "aokvqa_caption_blip_large_caption_val.jsonl"
+  test: "aokvqa_caption_blip_large_caption_test.jsonl"
 micro_batch_size: 2
 save_prediction: true
 priming: true
-num_train_examples: 10
+num_train_examples: 8
 train_path: "/zhangpai21/workspace/zxdu/aokvqa_v1p0/aokvqa_v1p0_train.json"

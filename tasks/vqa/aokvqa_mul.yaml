@@ -2,16 +2,12 @@ name: 'a-okvqa'
 type: 'mul'
 module: "tasks.vqa.task.VQAMulTask"
 path: 'aokvqa_v1p0'
+description-path: "/zhangpai21/workspace/zxdu/VQA"
 file-pattern:
   validation: "aokvqa_v1p0_val.json"
-description-path: "/group/30042/zhengxiaodu/VQA"
-clip-pattern:
-  validation: "aokvqa_entity_clip_vg_val.jsonl"
-  test: "aokvqa_entity_clip_vg_test.jsonl"
 caption-pattern:
+  train: "aokvqa_caption_blip_large_caption_train.jsonl"
   validation: "aokvqa_caption_blip_large_caption_val.jsonl"
   test: "aokvqa_caption_blip_large_caption_test.jsonl"
-support-pattern:
-  validation: "aokvqa_rationale_beam_val.json"
 micro_batch_size: 6
 save_prediction: true
