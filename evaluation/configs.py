@@ -52,6 +52,7 @@ class GenerationTaskConfig(BaseConfig):
     min_gen_length: int = 0
     max_gen_length: int = 128
     deterministic: bool = True
+    sampling_times: int = None
     top_k: int = 0
     top_p: float = 0.0
     return_all_beams: bool = False
