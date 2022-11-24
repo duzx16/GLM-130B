@@ -31,10 +31,10 @@ class BaseStrategy:
         for invalid_slice in self.invalid_slices:
             logits[..., invalid_slice] = -65504
 
-        logits = top_k_logits(logits, self.topk, self.top_p)
         if self.deterministic:
             pred = logits.max(dim=-1)[1]
         else:
+            logits = top_k_logits(logits, self.topk, self.top_p)
             probs = F.softmax(logits.float(), dim=-1)  # float is essetial, due to a bug in Pytorch
             pred = torch.multinomial(probs, num_samples=1)
         for i in range(self.batch_size):

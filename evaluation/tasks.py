@@ -185,7 +185,8 @@ class GenerationTask(BaseTask, ABC):
             print_rank_0(f"End tokens {end_tokens}")
         if self.config.sampling_strategy == "BaseStrategy":
             self.strategy = BaseStrategy(batch_size=self.config.micro_batch_size, temperature=self.config.temperature,
-                                         top_k=1, end_tokens=end_tokens, deterministic=self.config.deterministic)
+                                         top_k=self.config.top_k, top_p=self.config.top_p, end_tokens=end_tokens,
+                                         deterministic=self.config.deterministic)
         elif self.config.sampling_strategy == "BeamSearchStrategy":
             self.strategy = BeamSearchStrategy(
                 self.config.micro_batch_size,
