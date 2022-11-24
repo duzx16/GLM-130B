@@ -1,11 +1,12 @@
 import os
 import json
 import re
-from typing import Union, List, Dict, Callable
+from typing import Union, List, Dict, Callable, Iterable
 from datetime import datetime
 from evaluation.tasks import GenerationTask, GenerationTaskDataset, GenerationTaskConfig
 from evaluation.utils import print_rank_0
 from dataclasses import dataclass
+from collections import defaultdict
 
 
 @dataclass
@@ -175,8 +176,16 @@ class ChainOfThoughtTask(GenerationTask):
         num_predictions = max(len(predictions), 1)
         assert len(predictions) == len(examples)
         for prediction, example in zip(predictions, examples):
-            output = self.tokenizer.detokenize(prediction)
-            prediction = extract_answer(output, self.config.name, self.config.chain_of_thought).strip()
+            if isinstance(prediction, Iterable):
+                prediction_count = defaultdict(int)
+                for output in prediction:
+                    output = extract_answer(self.tokenizer.detokenize(output), self.config.name,
+                                            self.config.chain_of_thought).strip()
+                    prediction_count[output] += 1
+                prediction = max(prediction_count.keys(), key=prediction_count.get)
+            else:
+                output = self.tokenizer.detokenize(prediction)
+                prediction = extract_answer(output, self.config.name, self.config.chain_of_thought).strip()
             target = self.tokenizer.detokenize(example["targets"]).strip()
             count += prediction == target
         return count * 100.0 / num_predictions
@@ -196,8 +205,13 @@ class ChainOfThoughtTask(GenerationTask):
     def save_prediction_to_file(self, file, predictions, data):
         results = []
         for output, item in zip(predictions, data):
-            output = self.tokenizer.detokenize(output)
-            prediction = extract_answer(output, self.config.name, self.config.chain_of_thought)
+            if isinstance(output, Iterable):
+                prediction = [
+                    extract_answer(self.tokenizer.detokenize(item), self.config.name, self.config.chain_of_thought) for
+                    item in output]
+            else:
+                output = self.tokenizer.detokenize(output)
+                prediction = extract_answer(output, self.config.name, self.config.chain_of_thought)
             target = self.tokenizer.detokenize(item["targets"])
             results.append({"output": output, "prediction": prediction, "answer": target})
         file_name = file.split(".")[0]
