@@ -45,12 +45,17 @@ class GenerationTaskConfig(BaseConfig):
     module = "evaluation.GenerationTask"
     metrics: List[str] = field(default_factory=lambda: [])
     sampling_strategy: str = "BaseStrategy"
+    temperature: float = 1.0
     num_beams: int = 4
     length_penalty: float = 1.0
     no_repeat_ngram_size: int = 3
     min_gen_length: int = 0
     max_gen_length: int = 128
-    deterministic: bool = False
+    deterministic: bool = True
+    sampling_times: int = None
+    top_k: int = 0
+    top_p: float = 0.0
+    return_all_beams: bool = False
     end_tokens: List[str] = field(default_factory=lambda: [])
 
 

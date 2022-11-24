@@ -184,8 +184,9 @@ class GenerationTask(BaseTask, ABC):
                 end_tokens.append(self.tokenizer.tokenize(token)[-1])
             print_rank_0(f"End tokens {end_tokens}")
         if self.config.sampling_strategy == "BaseStrategy":
-            self.strategy = BaseStrategy(batch_size=self.config.micro_batch_size, temperature=1.0, top_k=1,
-                                         end_tokens=end_tokens, deterministic=self.config.deterministic)
+            self.strategy = BaseStrategy(batch_size=self.config.micro_batch_size, temperature=self.config.temperature,
+                                         top_k=self.config.top_k, top_p=self.config.top_p, end_tokens=end_tokens,
+                                         deterministic=self.config.deterministic)
         elif self.config.sampling_strategy == "BeamSearchStrategy":
             self.strategy = BeamSearchStrategy(
                 self.config.micro_batch_size,
@@ -195,13 +196,19 @@ class GenerationTask(BaseTask, ABC):
                 end_tokens=end_tokens,
                 no_repeat_ngram_size=self.config.no_repeat_ngram_size,
                 min_gen_length=self.config.min_gen_length,
-                deterministic=self.config.deterministic,  # For evaluation, we need a determined generation strategy
+                deterministic=self.config.deterministic,  # Change to stochastic for rationale generation
+                temperature=self.config.temperature,
             )
         else:
             raise ValueError(f"unknown strategy {self.config.sampling_strategy}")
 
     def predict_single_batch(self, batch) -> List[List[int]]:
-        output = self.model.generate_text(batch, self.strategy, return_all_beams=False)
+        if self.config.sampling_times is not None:
+            output = []
+            for _ in range(self.config.sampling_times):
+                output += self.model.generate_text(batch, self.strategy, return_all_beams=self.config.return_all_beams)
+        else:
+            output = self.model.generate_text(batch, self.strategy, return_all_beams=self.config.return_all_beams)
         return output
 
 

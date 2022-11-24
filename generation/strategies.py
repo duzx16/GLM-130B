@@ -31,10 +31,10 @@ class BaseStrategy:
         for invalid_slice in self.invalid_slices:
             logits[..., invalid_slice] = -65504
 
-        logits = top_k_logits(logits, self.topk, self.top_p)
         if self.deterministic:
             pred = logits.max(dim=-1)[1]
         else:
+            logits = top_k_logits(logits, self.topk, self.top_p)
             probs = F.softmax(logits.float(), dim=-1)  # float is essetial, due to a bug in Pytorch
             pred = torch.multinomial(probs, num_samples=1)
         for i in range(self.batch_size):
@@ -64,6 +64,7 @@ class BeamSearchStrategy:
         no_repeat_ngram_size=0,
         min_gen_length=0,
         deterministic=False,
+        temperature=1.0,
     ):
         self.batch_size = batch_size
         self.num_beams = num_beams
@@ -74,6 +75,7 @@ class BeamSearchStrategy:
         self.invalid_slices = invalid_slices
         self.consider_end = consider_end
         self.deterministic = deterministic
+        self.temperature = temperature
         self._init_cache()
 
     def _init_cache(self):
@@ -122,6 +124,8 @@ class BeamSearchStrategy:
         next_token_scores = next_token_scores + prev_scores
 
         next_token_scores = next_token_scores.view(batch_size, num_beams * vocab_size)
+        if self.temperature is not None:
+            next_token_scores = next_token_scores / self.temperature
 
         probs = F.softmax(next_token_scores, dim=-1)
         if num_beams < self.num_beams:  # First token
