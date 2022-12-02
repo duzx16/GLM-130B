@@ -1,7 +1,7 @@
 name: 'gsm8k'
 type: 'gen'
 module: "tasks.cot.task.ChainOfThoughtTask"
-path: 'grade-school-math/grade_school_math/data'
+path: 'grade_school_math/data'
 file-pattern:
   test: "test.jsonl"
 sampling_strategy: "BaseStrategy"
