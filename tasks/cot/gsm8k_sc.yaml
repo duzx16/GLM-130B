@@ -6,9 +6,14 @@ file-pattern:
   test: "test.jsonl"
 sampling_strategy: "BaseStrategy"
 prompt_path: "tasks/cot/gsm8k_prompt.txt"
-deterministic: true
+deterministic: false
+temperature: 0.7
+top_k: 40
 max_gen_length: 128
+num_beams: 8
+sampling_times: 5
 use_task_mask: true
+return_all_beams: true
 save_prediction: true
 chain_of_thought: true
-micro_batch_size: 4
+micro_batch_size: 1
