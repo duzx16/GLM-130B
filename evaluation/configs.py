@@ -46,7 +46,7 @@ class GenerationTaskConfig(BaseConfig):
     metrics: List[str] = field(default_factory=lambda: [])
     sampling_strategy: str = "BaseStrategy"
     temperature: float = 1.0
-    num_beams: int = 4
+    num_beams: int = 1
     length_penalty: float = 1.0
     no_repeat_ngram_size: int = 3
     min_gen_length: int = 0

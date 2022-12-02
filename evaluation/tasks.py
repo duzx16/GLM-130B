@@ -186,7 +186,7 @@ class GenerationTask(BaseTask, ABC):
         if self.config.sampling_strategy == "BaseStrategy":
             self.strategy = BaseStrategy(batch_size=self.config.micro_batch_size, temperature=self.config.temperature,
                                          top_k=self.config.top_k, top_p=self.config.top_p, end_tokens=end_tokens,
-                                         deterministic=self.config.deterministic)
+                                         num_beams=self.config.num_beams, deterministic=self.config.deterministic)
         elif self.config.sampling_strategy == "BeamSearchStrategy":
             self.strategy = BeamSearchStrategy(
                 self.config.micro_batch_size,
@@ -204,12 +204,16 @@ class GenerationTask(BaseTask, ABC):
 
     def predict_single_batch(self, batch) -> List[List[int]]:
         if self.config.sampling_times is not None:
-            output = []
+            outputs = None
             for _ in range(self.config.sampling_times):
-                output += self.model.generate_text(batch, self.strategy, return_all_beams=self.config.return_all_beams)
+                output = self.model.generate_text(batch, self.strategy, return_all_beams=self.config.return_all_beams)
+                if outputs is None:
+                    outputs = output
+                else:
+                    outputs = [last + item for last, item in zip(outputs, output)]
         else:
-            output = self.model.generate_text(batch, self.strategy, return_all_beams=self.config.return_all_beams)
-        return output
+            outputs = self.model.generate_text(batch, self.strategy, return_all_beams=self.config.return_all_beams)
+        return outputs
 
 
 class MultiChoiceTask(BaseTask, ABC):

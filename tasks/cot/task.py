@@ -176,13 +176,17 @@ class ChainOfThoughtTask(GenerationTask):
         num_predictions = max(len(predictions), 1)
         assert len(predictions) == len(examples)
         for prediction, example in zip(predictions, examples):
-            if isinstance(prediction, Iterable):
+            if isinstance(prediction, list):
                 prediction_count = defaultdict(int)
                 for output in prediction:
                     output = extract_answer(self.tokenizer.detokenize(output), self.config.name,
                                             self.config.chain_of_thought).strip()
-                    prediction_count[output] += 1
-                prediction = max(prediction_count.keys(), key=prediction_count.get)
+                    if output:
+                        prediction_count[output] += 1
+                if prediction_count:
+                    prediction = max(prediction_count.keys(), key=prediction_count.get)
+                else:
+                    prediction = ""
             else:
                 output = self.tokenizer.detokenize(prediction)
                 prediction = extract_answer(output, self.config.name, self.config.chain_of_thought).strip()
@@ -205,10 +209,10 @@ class ChainOfThoughtTask(GenerationTask):
     def save_prediction_to_file(self, file, predictions, data):
         results = []
         for output, item in zip(predictions, data):
-            if isinstance(output, Iterable):
+            if isinstance(output, list):
+                output = [self.tokenizer.detokenize(item) for item in output]
                 prediction = [
-                    extract_answer(self.tokenizer.detokenize(item), self.config.name, self.config.chain_of_thought) for
-                    item in output]
+                    extract_answer(item, self.config.name, self.config.chain_of_thought) for item in output]
             else:
                 output = self.tokenizer.detokenize(output)
                 prediction = extract_answer(output, self.config.name, self.config.chain_of_thought)

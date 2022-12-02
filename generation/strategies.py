@@ -5,7 +5,7 @@ from SwissArmyTransformer.generation.sampling_strategies.base_strategy import to
 
 class BaseStrategy:
     def __init__(self, batch_size, invalid_slices=[], temperature=1., top_k=200, eps=1e-4, top_p=0.0, end_tokens=None,
-                 deterministic=False):
+                 num_beams=1, deterministic=False):
         self.batch_size = batch_size
         self.invalid_slices = invalid_slices
         self.temperature = temperature
@@ -16,15 +16,20 @@ class BaseStrategy:
             end_tokens = []
         self.end_tokens = end_tokens
         self.deterministic = deterministic
-        self._is_done = np.zeros(self.batch_size, dtype=np.bool)
+        self.num_beams = num_beams
+        assert not (self.deterministic and self.num_beams > 1)
+        self._is_done = np.zeros((self.batch_size, self.num_beams), dtype=np.bool)
 
     @property
     def is_done(self) -> bool:
         return self._is_done.all()
 
     def forward(self, logits, tokens, mems, temperature=None):
-        logits = logits.view(-1, logits.size(-1))
-        batch_size = tokens.shape[0]
+        batch_size, num_beams = tokens.shape[:2]
+        if num_beams < self.num_beams:
+            tokens = tokens.expand(-1, self.num_beams, -1)
+            logits = logits.expand(-1, self.num_beams, -1)
+            mems = mems.expand(-1, -1, self.num_beams, -1, -1)
         if temperature is None:
             temperature = self.temperature
         logits = logits / temperature
@@ -36,19 +41,23 @@ class BaseStrategy:
         else:
             logits = top_k_logits(logits, self.topk, self.top_p)
             probs = F.softmax(logits.float(), dim=-1)  # float is essetial, due to a bug in Pytorch
+            probs = probs.reshape(batch_size * self.num_beams, -1)
             pred = torch.multinomial(probs, num_samples=1)
+            pred = pred.reshape(batch_size, self.num_beams)
         for i in range(self.batch_size):
             if i >= batch_size:
-                self._is_done[i] = True
-            elif self._is_done[i]:
-                pred[i] = -1
-            elif pred[i].item() in self.end_tokens:
-                self._is_done[i] = True
+                self._is_done[i, :] = True
+            else:
+                for j in range(self.num_beams):
+                    if self._is_done[i, j]:
+                        pred[i, j] = -1
+                    elif pred[i, j].item() in self.end_tokens:
+                        self._is_done[i, j] = True
         tokens = torch.cat((tokens, pred.view(tokens.shape[:-1] + (1,))), dim=-1)
         return tokens, mems
 
     def finalize(self, tokens, mems):
-        self._is_done = np.zeros(self.batch_size, dtype=np.bool)
+        self._is_done = np.zeros((self.batch_size, self.num_beams), dtype=np.bool)
         return tokens, mems
 
 
