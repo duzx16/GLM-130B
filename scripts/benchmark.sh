@@ -6,12 +6,8 @@ main_dir=$(dirname $script_dir)
 
 source "${main_dir}/configs/model_glm_130b.sh"
 
-DATA_PATH="/zhangpai21/workspace/zxdu"
-
-ARGS="${main_dir}/evaluate.py \
+ARGS="${main_dir}/benchmark.py \
        --mode inference \
-       --data-path $DATA_PATH \
-       --task $* \
        $MODEL_ARGS"
 
 TIMESTAMP=$(date +'%Y.%m.%d-%H:%M:%S')
@@ -20,4 +16,5 @@ EXP_NAME=${TIMESTAMP}
 mkdir -p logs
 
 run_cmd="torchrun --nproc_per_node $MP_SIZE ${ARGS}"
+echo $run_cmd
 eval ${run_cmd} 2>&1 | tee logs/${EXP_NAME}.log

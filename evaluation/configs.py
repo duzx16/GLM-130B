@@ -27,6 +27,7 @@ class BaseConfig(YAMLWizard):
     max_seq_length: int = 2048  # Max sequence length
     no_tokenized: bool = False
     file_pattern: str | Dict[str, str] = "**/*.json*"  # Organize data file in groups
+    save_prediction: bool = False
 
     micro_batch_size: int = 1  # 'gen' task only support mbs = 1 for now
 
@@ -45,11 +46,18 @@ class GenerationTaskConfig(BaseConfig):
     module = "evaluation.GenerationTask"
     metrics: List[str] = field(default_factory=lambda: [])
     sampling_strategy: str = "BaseStrategy"
-    num_beams: int = 4
+    temperature: float = 1.0
+    num_beams: int = 1
     length_penalty: float = 1.0
     no_repeat_ngram_size: int = 3
     min_gen_length: int = 0
     max_gen_length: int = 128
+    deterministic: bool = True
+    sampling_times: int = None
+    top_k: int = 0
+    top_p: float = 0.0
+    return_all_beams: bool = False
+    end_tokens: List[str] = field(default_factory=lambda: [])
 
 
 @dataclass

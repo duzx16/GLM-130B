@@ -63,13 +63,22 @@ class EvaluationDataset(torch.utils.data.Dataset, ABC):
         return None
 
     def process_single_file(self, path):
+        if not path.endswith("jsonl"):
+            try:
+                with open(os.path.join(path), "r", encoding="utf-8") as file:
+                    dataset = json.load(file)
+                for item in dataset:
+                    self.data.extend(self.process_single_item(item))
+                return
+            except json.decoder.JSONDecodeError:
+                pass
         with open(os.path.join(path), "r", encoding="utf-8") as file:
             for line in file:
                 item = json.loads(line)
-                self.data.append(self.process_single_item(item))
+                self.data.extend(self.process_single_item(item))
 
     @abstractmethod
-    def process_single_item(self, item) -> dict:
+    def process_single_item(self, item, **kwargs) -> List[dict]:
         pass
 
     def __len__(self):
@@ -79,12 +88,12 @@ class EvaluationDataset(torch.utils.data.Dataset, ABC):
 class GenerationTaskDataset(EvaluationDataset):
     config: GenerationTaskConfig
 
-    def process_single_item(self, item):
+    def process_single_item(self, item, **kwargs):
         text, targets = get_tokenized_input(item, "inputs"), get_tokenized_input(item, "targets")
         if len(text) + self.config.max_gen_length + 2 > self.config.max_seq_length:
             text_length = self.config.max_seq_length - self.config.max_gen_length - 2
             text = text[len(text) - text_length : len(text)]
-        return {"text": text, "targets": targets}
+        return [{"text": text, "targets": targets, **kwargs}]
 
     @property
     def has_collate_fn(self) -> bool:
@@ -159,12 +168,15 @@ class GenerationTaskDataset(EvaluationDataset):
 
     def __getitem__(self, idx):
         item = self.data[idx]
-        return self.build_generation_sample(
+        sample = self.build_generation_sample(
             item["text"],
             max_gen_length=self.config.max_gen_length,
             use_task_mask=self.config.use_task_mask,
             unidirectional=self.config.unidirectional,
         )
+        if "target" in item:
+            sample["targets"] = [np.array(target, dtype=self.dtype) for target in item["targets"]]
+        return sample
 
 
 class SmallGenerationTaskDataset(GenerationTaskDataset):
@@ -271,7 +283,7 @@ class MultiChoiceTaskDataset(EvaluationDataset):
             "is_single_token": is_single_token,
         }
 
-    def process_single_item(self, item):
+    def process_single_item(self, item, **kwargs):
         text = get_tokenized_input(item, "inputs", no_tokenized=self.config.no_tokenized)
         choices = get_tokenized_input(item, "choices", no_tokenized=self.config.no_tokenized)
         label = item["label"]
@@ -293,18 +305,20 @@ class MultiChoiceTaskDataset(EvaluationDataset):
         if tgt_seq_length != 1:
             self.is_single_token = False
 
-        return {
+        return [{
             "text": text,
             "choices": choices,
             "label": label,
-        }
+            **kwargs
+        }]
 
     @staticmethod
-    def build_multiple_choice_sample(text, choices, is_single_token, unified_multitask_encoding=False):
+    def build_multiple_choice_sample(text, choices, is_single_token, unified_multitask_encoding=False,
+                                     unidirectional=False, use_task_mask=False):
         tokenizer = get_tokenizer()
 
         sop_id = tokenizer.get_command("sop")
-        mask_id = tokenizer.get_command("[MASK]")
+        mask_id = tokenizer.get_command("[gMASK]") if use_task_mask else tokenizer.get_command("[MASK]")
 
         token = np.array(text, dtype=np.int64)
         target = np.array(text, dtype=np.int64)
@@ -313,35 +327,51 @@ class MultiChoiceTaskDataset(EvaluationDataset):
 
         blank_filling = mask_id in text
         if not blank_filling:
-            mask_position = len(token)
-            token = np.concatenate((token, [mask_id]))
-            target = np.concatenate((target, [mask_id]))
-            position_id = np.concatenate((position_id, [mask_position]))
+            if unidirectional:
+                assert use_task_mask
+                token = np.concatenate(([mask_id, sop_id], token[:-1]))
+                target = np.concatenate(([mask_id, sop_id], target[:-1]))
+                position_id = np.arange(len(token), dtype=np.int64)
+                mask_position = len(token)
+            else:
+                mask_position = len(token)
+                token = np.concatenate((token, [mask_id]))
+                target = np.concatenate((target, [mask_id]))
+                position_id = np.concatenate((position_id, [mask_position]))
         else:
+            assert not unidirectional, "Unidirectional attention doesn't support blank filling"
+            assert not use_task_mask, "Unidirectional attention doesn't support task mask"
             mask_position = text.index(mask_id)
 
         division = len(token)
         attention_mask = [np.ones((len(token), len(token)), dtype=np.int64)]
+        if unidirectional:
+            attention_mask[0] = np.tril(attention_mask[0])
 
         for choice in choices:
+            if not choice:
+                choice = [tokenizer.get_command('eop')]
             position_id = np.concatenate(
                 (
                     position_id,
                     [mask_position] * len(choice)
-                    if blank_filling or not unified_multitask_encoding
+                    if (blank_filling or not unified_multitask_encoding) and not use_task_mask
                     else np.arange(mask_position, mask_position + len(choice), dtype=np.int64),
                 )
             )
             choice_target_id.append(np.arange(len(token), len(token) + len(choice), dtype=np.int64))
             attention_mask.append(np.tril(np.ones((len(choice), len(choice)), dtype=np.int64)))
-            token = np.concatenate((token, [sop_id], choice[:-1]))
+            if unidirectional:
+                token = np.concatenate((token, [text[-1]], choice[:-1]))
+            else:
+                token = np.concatenate((token, [sop_id], choice[:-1]))
             target = np.concatenate((target, choice))
 
             if is_single_token:
                 break
 
         attention_mask = block_diag(*attention_mask)
-        attention_mask[: len(token), :division] = 1
+        attention_mask[division:, :division] = 1
 
         if is_single_token:
             choices = np.array(choices, dtype=np.int64).squeeze().tolist()
@@ -444,19 +474,25 @@ class SmallMultiChoiceTaskDataset(MultiChoiceTaskDataset):
 
     def __getitem__(self, idx):
         item = self.data[idx]
-        return self.build_multiple_choice_sample(
+        sample = self.build_multiple_choice_sample(
             item["text"],
             item["choices"],
             is_single_token=self.is_single_token,
             unified_multitask_encoding=self.config.use_multitask_encoding,
-            unidirectional=self.config.unidirectional
+            unidirectional=self.config.unidirectional,
+            use_task_mask=self.config.use_task_mask,
         )
+        sample["label"] = item["label"]
+        return sample
 
 
 class LanguageModelTaskDataset(EvaluationDataset):
     config: LanguageModelTaskConfig
+    left_weights: List[int]
+    weights: List[int]
 
     def process_single_file(self, path):
+        num_sequences = []
         with open(os.path.join(path), "r", encoding="utf-8") as file:
             raw_text = file.read()
             tokens = self.tokenizer.tokenize(raw_text)
@@ -473,6 +509,9 @@ class LanguageModelTaskDataset(EvaluationDataset):
                     ),
                 }
             )
+            num_sequences.append(self.data[-1]["num_sequences"])
+        self.weights = list(accumulate(num_sequences))
+        self.left_weights = [0] + self.weights[:-1]
 
     def process_single_item(self, item):
         pass
@@ -481,15 +520,17 @@ class LanguageModelTaskDataset(EvaluationDataset):
         return self.data[0]["num_sequences"]
 
     def __getitem__(self, idx):
+        document_idx = bisect_right(self.weights, idx)
+        idx = idx - self.left_weights[document_idx]
         start_idx = idx * self.config.generation_length
         end_idx = start_idx + self.config.max_seq_length - 1  # for additional [gMASK]
-        tokens = self.data[0]["raw_text"][start_idx:end_idx]
+        tokens = self.data[document_idx]["raw_text"][start_idx:end_idx]
 
         mask_id = self.gmask_id if self.config.use_task_mask else self.mask_id
         sop_id = self.tokenizer.get_command("sop")
 
         if idx == 0 or self.config.unidirectional:
-            prompt, text = tokens[:1], tokens[1:]
+            prompt, text = [], tokens
         else:
             prompt_length = self.config.max_seq_length - 1 - self.config.generation_length
             prompt, text = tokens[:prompt_length], tokens[prompt_length:]
