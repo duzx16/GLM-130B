@@ -84,7 +84,8 @@ def initialize_model_and_tokenizer(args):
     for i in range(get_model_parallel_world_size()):
         if get_model_parallel_rank() == i:
             # Initialize model
-            model = GLM130B(args).half()
+            model = GLMModel(args).half()
+            model.add_mixin('cached-autoregressive', CachedAutoregressiveMixin())
 
             if args.from_quantized_checkpoint:
                 assert args.quantization_bit_width is not None

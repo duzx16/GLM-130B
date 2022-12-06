@@ -3,7 +3,7 @@ import json
 import re
 from typing import Union, List, Dict, Callable, Iterable
 from datetime import datetime
-from evaluation.tasks import GenerationTask, GenerationTaskDataset, GenerationTaskConfig
+from evaluation.tasks import GenerationTask, GenerationTaskConfig, SmallGenerationTaskDataset
 from evaluation.utils import print_rank_0
 from dataclasses import dataclass
 from collections import defaultdict
@@ -102,7 +102,7 @@ def extract_answer(prediction, task_name, chain_of_thought=True):
     return answer
 
 
-class ChainOfThoughtDataset(GenerationTaskDataset):
+class ChainOfThoughtDataset(SmallGenerationTaskDataset):
     config: ChainOfThoughtConfig
 
     def __init__(self, path: Union[str, List[str]], config: ChainOfThoughtConfig):
@@ -176,7 +176,7 @@ class ChainOfThoughtTask(GenerationTask):
         num_predictions = max(len(predictions), 1)
         assert len(predictions) == len(examples)
         for prediction, example in zip(predictions, examples):
-            if isinstance(prediction, list):
+            if self.config.return_all_beams:
                 prediction_count = defaultdict(int)
                 for output in prediction:
                     output = extract_answer(self.tokenizer.detokenize(output), self.config.name,
@@ -209,7 +209,7 @@ class ChainOfThoughtTask(GenerationTask):
     def save_prediction_to_file(self, file, predictions, data):
         results = []
         for output, item in zip(predictions, data):
-            if isinstance(output, list):
+            if self.config.return_all_beams:
                 output = [self.tokenizer.detokenize(item) for item in output]
                 prediction = [
                     extract_answer(item, self.config.name, self.config.chain_of_thought) for item in output]

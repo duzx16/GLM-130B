@@ -6,6 +6,7 @@ file-pattern:
   test: "test.jsonl"
 sampling_strategy: "BaseStrategy"
 prompt_path: "tasks/cot/gsm8k_prompt.txt"
+max_seq_length: 1024
 deterministic: true
 max_gen_length: 128
 use_task_mask: true

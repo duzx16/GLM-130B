@@ -1,5 +1,5 @@
 MODEL_TYPE="glm-10b"
-CHECKPOINT_PATH="/zhangpai21/checkpoints/glm-10b-sat"
+CHECKPOINT_PATH="/zhangpai21/checkpoints/blocklm-10b-mip"
 MP_SIZE=1
 MODEL_ARGS="--model-parallel-size ${MP_SIZE} \
             --vocab 50304 \
@@ -10,4 +10,5 @@ MODEL_ARGS="--model-parallel-size ${MP_SIZE} \
             --tokenizer-type glm_GPT2BPETokenizer \
             --tokenizer-model-type gpt2 \
             --task-mask \
+            --use-gpu-initialization \
             --load ${CHECKPOINT_PATH}"
